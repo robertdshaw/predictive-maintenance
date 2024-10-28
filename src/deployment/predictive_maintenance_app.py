@@ -1,33 +1,52 @@
 import streamlit as st
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from tensorflow.keras.models import load_model
+from sklearn.preprocessing import MinMaxScaler
+import seaborn as sns
 
-# Users input the sensor parameters and click the Predict button, 
-# they then receive feedback indicating the likelihood of failure and the remaining useful life for each component, 
-# helping them make informed maintenance decisions.
+import streamlit as st
+import numpy as np
+import pandas as pd
+import requests  # To fetch data from an API
+from tensorflow.keras.models import load_model
+from sklearn.preprocessing import MinMaxScaler
+import time
+import matplotlib.pyplot as plt
 
-st.title('Predictive Maintenance App')
+model = load_model('rul_model.h5')
 
-# Load trained model
-model = tf.keras.models.load_model('best model path')
+scaler = MinMaxScaler()
 
-# Input fields for user to enter shit
-voltage = st.number_input('Enter voltage:', value=0.0)
-pressure = st.number_input('Enter pressure:', value=0.0)
-rotation = st.number_input('Enter rotation:', value=0.0)
-vibration = st.number_input('Enter vibration:', value=0.0)
+def get_real_time_data():
+    response = requests.get("create an API or from kaggle")
+    data = response.json()
+    df = pd.DataFrame(data)
+    
+    return df
 
-# Predict based on user inputs
-if st.button('Predict'):
-    inputs = np.array([[voltage, pressure, rotation, vibration]]) 
-    predictions = model.predict(inputs)
+# Function to preprocess and predict RUL for a machine in real time
+def predict_rul_real_time(machine_id, telemetry_data):
+    telemetry_data_scaled = scaler.transform(telemetry_data)
+    
+    predicted_rul = model.predict(telemetry_data_scaled)
+    
+    return np.expm1(predicted_rul).flatten()[0]
 
-    predicted_class = predictions[0][0]  
-    predicted_rul = predictions[1]  
+# Streamlit App
+st.title("Real-Time RUL Prediction for Machines")
 
-    # Display the predictions
-    st.write(f'Predicted Failure Class: {"Failure" if predicted_class >= 0.5 else "No Failure"}')
-    st.write('Predicted Remaining Useful Life (RUL):')
-    st.write(f'Component 1: {predicted_rul[0]:.2f} hours')
-    st.write(f'Component 2: {predicted_rul[1]:.2f} hours')
-    st.write(f'Component 3: {predicted_rul[2]:.2f} hours')
-    st.write(f'Component 4: {predicted_rul[3]:.2f} hours')
+if st.button("Start Real-Time Prediction"):
+    st.write("Fetching real-time data...")
+
+    while True:
+        real_time_data = get_real_time_data()
+
+        machine_id = st.selectbox("Select Machine", real_time_data['machineID'].unique())
+        telemetry_data = real_time_data[real_time_data['machineID'] == machine_id].iloc[:, :-1]  # Drop RUL column if present
+        
+        predicted_rul = predict_rul_real_time(machine_id, telemetry_data)
+        st.write(f"Predicted RUL for Machine {machine_id}: {predicted_rul:.2f}")
+
+        time.sleep(10)  # Fetch new data every 10 seconds
